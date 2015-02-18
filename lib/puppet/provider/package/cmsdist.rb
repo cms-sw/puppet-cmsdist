@@ -8,7 +8,6 @@ Puppet::Type.type(:package).provide :cmsdist, :parent => Puppet::Provider::Packa
   desc "CMS packages via apt-get."
 
   has_feature :unversionable
-  has_feature :package_settings
   has_feature :install_options
 
   def self.home
@@ -62,13 +61,8 @@ Puppet::Type.type(:package).provide :cmsdist, :parent => Puppet::Provider::Packa
       return
     end
     Puppet.debug("Creating #{prefix} and assigning it to #{user}")
-    begin
-      execute ["mkdir", "-p", prefix]
-      execute ["chown", user, prefix]
-    rescue Exception => e
-      Puppet.warning "Unable to create / find installation area. Please check your install_options."
-      raise e
-    end
+    execute ["mkdir", "-p", prefix]
+    execute ["chown", user, prefix]
     Puppet.debug("Fetching bootstrap from #{repository}")
     execute ["wget", "--no-check-certificate", "-O",
              File.join([prefix, "bootstrap-#{architecture}.sh"]),
@@ -146,8 +140,37 @@ Puppet::Type.type(:package).provide :cmsdist, :parent => Puppet::Provider::Packa
     end
   end
 
+  def self.listPackages
+    Puppet.debug "Listing packages in /opt/cms"
+    prefix = "/opt/cms"
+    architectures = Dir.entries(prefix).select{|f|
+      f.match /^(slc|osx|fc|cc)[0-9]/
+    }
+    Puppet.debug "Found following architectures in #{prefix}: #{architectures}"
+    packages = []
+    architectures.collect {|architecture|
+      output = "\n" + `bash -c 'source #{prefix}/#{architecture}/external/apt/*/etc/profile.d/init.sh 2>&1 >/dev/null; rpm -qa'`.chomp
+      Puppet.debug output
+      packagesList = output.split(/\n/)
+      packagesList.reject! {|p| p.chomp == ""}
+      packages.concat(packagesList.collect {|name|
+        {
+          :name => name + "/#{architecture}",
+          :ensure => "present", 
+          :install_options => {
+            :architecture => architecture,
+            :prefix => prefix
+          }
+        }
+      })
+    }
+    packages
+  end
+  
   def self.instances
-    return []
+    self.listPackages().collect do |hash|
+      new(hash)
+    end
   end
 
   # Override default `execute` to run super method in a clean
