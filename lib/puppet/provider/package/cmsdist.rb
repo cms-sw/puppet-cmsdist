@@ -155,6 +155,7 @@ Puppet::Type.type(:package).provide :cmsdist, :parent => Puppet::Provider::Packa
     fullname, overwrite_architecture = @resource[:name].split "/"
     architecture = (overwrite_architecture and overwrite_architecture or architecture)
     group, package, version = fullname.split "+"
+    bootstrap(architecture, prefix, user, repository, server, server_path)
     cmsdistrc(architecture, prefix, user, server)
     pkgfile = File.join([prefix, architecture, ".cmsdistrc", "PKG_#{fullname}" ])
     pkgfile_exist = File.exists? pkgfile
